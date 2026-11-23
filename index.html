@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Many VAs Do You Need?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: header → grand total banner + per-role strip (sticky) → 4 role tabs, each a stack of task blocks, beside a result card. Stacks on mobile. */
+:root{
+  --bg:#f3f7f2; --surface:#ffffff; --ink:#142019; --muted:#566a5e; --line:#d8e3db; --accent:#1f6b45; --accent-ink:#ffffff; --accent-soft:#e2f1e7;
+  --good:#1f7a4a; --good-bg:#dff3e6;
+  --font-display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1511; --surface:#16201a; --ink:#e4eee7; --muted:#9bb0a3; --line:#2a3a31; --accent:#62c690; --accent-ink:#0e1511; --accent-soft:#1d3527;
+    --good:#6fd39b; --good-bg:#183224; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1511; --surface:#16201a; --ink:#e4eee7; --muted:#9bb0a3; --line:#2a3a31; --accent:#62c690; --accent-ink:#0e1511; --accent-soft:#1d3527;
+  --good:#6fd39b; --good-bg:#183224; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.5}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 20px 64px;display:flex;flex-direction:column;gap:22px}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance;letter-spacing:-0.01em}
+h1{font-size:34px;line-height:1.12}
+h2{font-size:21px}
+.brand{font-size:13px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.lead{color:var(--muted);margin:8px 0 0;max-width:62ch}
+.hint{color:var(--muted);font-size:13.5px}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* summary strip */
+.strip{position:sticky;top:0;z-index:5;background:var(--bg);padding:8px 0}
+.grand{background:var(--accent);color:var(--accent-ink);border-radius:14px 14px 0 0;padding:14px 18px;display:flex;align-items:center;gap:18px 28px;flex-wrap:wrap}
+.g-main{display:flex;flex-direction:column;margin-right:auto}
+.g-label{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;opacity:.85}
+.g-num{font-family:var(--font-display);font-size:40px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+.g-facts{display:flex;gap:24px;flex-wrap:wrap}
+.g-facts div{display:flex;flex-direction:column}
+.g-k{font-size:12.5px;opacity:.85}
+.g-v{font-family:var(--font-display);font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.g-cta{background:var(--accent-ink);color:var(--accent);font-weight:600;text-decoration:none;padding:10px 16px;border-radius:10px;white-space:nowrap}
+.g-cta:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+@media (max-width:900px){ .strip{position:static} }
+@media (max-width:520px){ .g-num{font-size:32px} .g-cta{width:100%;text-align:center} }
+.strip-inner{background:var(--surface);border:1px solid var(--line);border-top:none;border-radius:0 0 14px 14px;padding:12px;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+@media (max-width:900px){ .strip-inner{grid-template-columns:repeat(3,minmax(0,1fr))} }
+.sum{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:8px 10px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0}
+.sum .t{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sum .v{font-family:var(--font-display);font-weight:700;font-size:19px;font-variant-numeric:tabular-nums;line-height:1.2}
+.sum .h{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sum.off .v{color:var(--muted);font-weight:600;font-size:15px}
+.sum.current{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.total{background:var(--accent);color:var(--accent-ink);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;justify-content:center}
+.total .t{font-size:12.5px;opacity:.85}
+.total .v{font-family:var(--font-display);font-weight:700;font-size:24px;line-height:1.15;font-variant-numeric:tabular-nums}
+.total .h{font-size:12.5px;opacity:.9;font-variant-numeric:tabular-nums}
+
+.grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:22px;align-items:start}
+@media (max-width:900px){ .grid{grid-template-columns:1fr} }
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px}
+
+/* tabs */
+.tablist{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);margin:-4px -4px 18px;padding:0 4px}
+.tab{background:none;border:none;border-bottom:3px solid transparent;padding:10px 12px;color:var(--muted);font-weight:500;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.tab .dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.tab.on .dot{background:var(--accent)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.panel{display:flex;flex-direction:column;gap:16px}
+.panel[hidden]{display:none}
+.panel-top{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.panel-top p{margin:4px 0 0;color:var(--muted);max-width:52ch}
+.switch{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:6px 14px 6px 6px;font-weight:600;color:var(--ink)}
+.switch .knob{width:40px;height:24px;border-radius:999px;background:var(--line);position:relative;flex:none}
+.switch .knob::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--surface)}
+.switch[aria-checked="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.switch[aria-checked="true"] .knob{background:var(--accent)}
+.switch[aria-checked="true"] .knob::after{left:19px}
+@media (prefers-reduced-motion: no-preference){ .switch .knob::after{transition:left .15s ease} }
+.q{display:flex;flex-direction:column;gap:6px}
+.q-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.q label,.q .qlabel{font-weight:500}
+.q output{font-family:var(--font-display);font-weight:700;font-size:20px;font-variant-numeric:tabular-nums;color:var(--accent);min-width:3ch;text-align:right}
+input[type=range]{width:100%;accent-color:var(--accent);height:28px}
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.pick{flex:1 1 140px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:10px 12px;text-align:left}
+.pick[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.pick small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.task-result{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--accent-soft);border-radius:10px;padding:12px 14px}
+.task-result.off{background:var(--bg);color:var(--muted)}
+.task-result .big{font-family:var(--font-display);font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+.calc{font-size:14px;color:var(--muted);border-left:3px solid var(--accent);padding:4px 0 4px 12px;font-variant-numeric:tabular-nums}
+.calc strong{color:var(--ink)}
+.calc .ck{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);margin-bottom:2px}
+.calc p{margin:2px 0}
+.howto{margin-top:22px;border-top:1px solid var(--line);padding-top:16px}
+.howto h3{font-size:17px;margin-bottom:8px}
+.howto ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-size:14.5px;font-variant-numeric:tabular-nums}
+.howto li::marker{color:var(--accent);font-weight:700}
+.howto .note{font-size:13px;color:var(--muted);margin:10px 0 0}
+.nav{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding-top:14px}
+.navbtn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:9px 14px;font-weight:500}
+.navbtn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.navbtn[disabled]{visibility:hidden}
+
+/* result card */
+.result{position:sticky;top:250px;border:2px solid var(--accent);display:flex;flex-direction:column;gap:16px}
+@media (max-width:900px){ .result{position:static} }
+.eyebrow{font-size:12.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.bignum{font-family:var(--font-display);font-size:42px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+.team{display:flex;flex-direction:column;gap:8px}
+.member{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;background:var(--bg);border-radius:10px}
+.member .who{font-weight:600}
+.member .does{font-size:13px;color:var(--muted)}
+.member .n{font-family:var(--font-display);font-weight:700;font-size:17px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kv div{background:var(--bg);border-radius:10px;padding:10px 12px}
+.kv .k{font-size:12.5px;color:var(--muted)}
+.kv .v{font-family:var(--font-display);font-weight:700;font-size:22px;font-variant-numeric:tabular-nums}
+.busy{display:flex;gap:8px;align-items:center;font-size:14px;flex-wrap:wrap}
+.pill{font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:999px;color:var(--good);background:var(--good-bg)}
+.promo{font-size:13.5px;background:var(--accent-soft);border-radius:10px;padding:10px 12px}
+.cta{display:block;text-align:center;background:var(--accent);color:var(--accent-ink);font-weight:600;text-decoration:none;padding:12px 16px;border-radius:10px}
+.fine{font-size:12.5px;color:var(--muted);margin:0}
+@media (max-width:520px){ h1{font-size:27px} .bignum{font-size:34px} }
+
+/* role strip */
+.strip-inner{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:900px){ .strip-inner{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.sum .lines{display:flex;flex-direction:column;gap:1px;margin-top:4px;font-size:12.5px;font-variant-numeric:tabular-nums}
+.sum .lines span{display:flex;justify-content:space-between;gap:8px;color:var(--ink)}
+.sum .lines span em{font-style:normal;color:var(--muted)}
+/* task blocks */
+.tblock{border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.tblock.on{border-color:var(--accent);background:linear-gradient(var(--accent-soft),var(--accent-soft)) top/100% 0 no-repeat}
+.thead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.thead h4{font-family:var(--font-display);font-size:17px;margin:0}
+.thead p{margin:2px 0 0;color:var(--muted);font-size:14px;max-width:46ch}
+.tbody{display:flex;flex-direction:column;gap:12px}
+.tbody[hidden]{display:none}
+.mini{display:flex;justify-content:space-between;align-items:baseline;gap:10px;background:var(--accent-soft);border-radius:8px;padding:8px 12px;font-variant-numeric:tabular-nums}
+.mini b{font-family:var(--font-display);font-size:18px}
+.group-sub{display:flex;justify-content:space-between;gap:10px;align-items:baseline;background:var(--bg);border-radius:10px;padding:10px 14px;font-variant-numeric:tabular-nums}
+.group-sub b{font-family:var(--font-display);font-size:20px}
+.ptitle p{margin:4px 0 0;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">Clovers Virtual Assistance · Your partner in productivity</div>
+    <h1>How many virtual assistants does your practice need?</h1>
+    <p class="lead">For home health agency owners, clinic owners and practice managers. Go through the four tabs, switch on the tasks you want off your plate, and answer one quick question for each. Rough numbers are fine. Your totals update at the top as you go.</p>
+  </header>
+
+  <div class="strip" aria-label="Your recommended team">
+    <div class="grand" aria-live="polite">
+      <div class="g-main"><span class="g-label">Your recommended team</span><span class="g-num" id="gNum">—</span></div>
+      <div class="g-facts">
+        <div><span class="g-k">Monthly investment</span><span class="g-v" id="gMonthly">—</span></div>
+        <div><span class="g-k">Hours back to your team</span><span class="g-v" id="gHours">—</span></div>
+      </div>
+      <a class="g-cta" href="https://cloversva.org/contact.html#book" target="_blank" rel="noopener">Book a free call</a>
+    </div>
+    <div class="strip-inner" id="strip"></div>
+  </div>
+
+  <div class="grid">
+    <section class="card" aria-labelledby="tasksH">
+      <h2 id="tasksH" style="margin-bottom:12px">What do you want off your plate?</h2>
+      <div class="tablist" role="tablist" aria-labelledby="tasksH" id="tablist"></div>
+      <div id="panels"></div>
+      <div class="howto" aria-labelledby="howH">
+        <h3 id="howH">How your total is calculated</h3>
+        <ol id="howTotal"></ol>
+        <p class="note" id="howNote">The per-task VA numbers can add up to more or less than your total because each one is rounded on its own, and one VA can cover several tasks.</p>
+      </div>
+    </section>
+
+    <aside class="card result" aria-live="polite" aria-label="Your estimate">
+      <div class="kv">
+        <div><div class="k">Hours back to your team</div><div class="v" id="hoursBack">—</div><div class="k">per week</div></div>
+        <div><div class="k">Monthly investment</div><div class="v" id="monthly">—</div><div class="k" id="weekly">—</div></div>
+      </div>
+      <div class="busy" id="busy"></div>
+      <div class="promo" id="promo"></div>
+      <a class="cta" href="https://cloversva.org/contact.html#book" target="_blank" rel="noopener">Book a free discovery call</a>
+      <p class="fine">Tasks share VAs, so your total team can be smaller than the per-task numbers added up. Each VA works 40 paid hours a week, planned at about 85% busy to leave room for training and busy days. We confirm your volumes on the discovery call and review staffing after 30 days.</p>
+      <p class="fine">cloversva.org/contact.html#book · support@cloverva.org</p>
+    </aside>
+  </div>
+</div>
+
+<script>
+/* ===== Assumptions: adjust these to match what Clovers sees with real clients ===== */
+const CFG = { paidHours:40, targetBusy:0.85, step:0.5, introUntil:'Dec 31, 2026',
+  authsPerPatientMonth:{medicare:0.2, mix:0.6, managed:1.0} };
+const INTRO = {admin:10, rn:12};
+const WPM = 52/12; // weeks per month
+
+/* Questions. Shared ones (e.g. active patients) stay in sync across tasks. */
+const FIELDS = {
+  referrals:  {label:'New patients or referrals per month', min:0, max:200, step:1, val:20},
+  bookings:   {label:'Appointments scheduled per day', min:0, max:80, step:1, val:15},
+  phoneHrs:   {label:'Hours a day on calls, voicemails & the patient inbox', min:0.5, max:10, step:0.5, val:1},
+  satHrs:     {label:'Saturday hours to cover', min:1, max:10, step:1, val:4},
+  claims:     {label:'Visits or claims billed per week', min:0, max:1000, step:10, val:120},
+  staffN:     {label:'Employees and contractors on payroll', min:1, max:200, step:1, val:15},
+  clinicians: {label:'Clinicians and providers (doctors, nurses, therapists, aides)', min:1, max:100, step:1, val:12},
+  census:     {label:'Active patients right now', min:10, max:500, step:5, val:60},
+  orders:     {label:'Orders and results to route per week', min:0, max:500, step:5, val:60},
+  dme:        {label:'Durable medical equipment (DME) orders per week', min:0, max:100, step:1, val:8},
+  execs:      {label:'Doctors or leaders who need calendar support', min:1, max:10, step:1, val:2},
+  bdHrs:      {label:'Hours a week of business development follow-up', min:0, max:20, step:1, val:4},
+  commsHrs:   {label:'Hours a day on internal communications', min:0.5, max:4, step:0.5, val:0.5},
+};
+const PAYER = {medicare:'mostly Medicare', mix:'a mix of payers', managed:'mostly insurance / Medicaid'};
+const f1 = n => (Math.round(n*10)/10).toLocaleString('en-US');
+
+const GROUPS = [
+  {id:'front',    name:'Front desk',              desc:'The first voice and face of your practice: intake, bookings and the phones.'},
+  {id:'billing',  name:'Billing, HR & scheduling',desc:'Back-office work that keeps you paid, staffed and on schedule.'},
+  {id:'clinical', name:'Clinical (RN)',           desc:'Clinical support handled by a licensed RN.'},
+  {id:'exec',     name:'Executive assistant',     desc:'Support for the owners and doctors running the practice.'},
+];
+/* rate = hourly rate from the Clovers rate card (non-RN or RN). */
+const TASKS = [
+  // Front desk
+  {id:'intake', g:'front', short:'Intake & registration', name:'Patient intake & registration', desc:'Register new patients, collect documents and verify insurance eligibility.', rate:13, on:true,
+    fields:['referrals'], hours:s=>s.referrals/WPM*55/60,
+    calc:s=>`${s.referrals} new patients a month ÷ 4.33 weeks = ${f1(s.referrals/WPM)} a week × 55 min each`},
+  {id:'bookings', g:'front', short:'Scheduling', name:'Scheduling', desc:'Book, confirm and reschedule appointments.', rate:12, on:true,
+    fields:['bookings'], hours:s=>s.bookings*5*5/60,
+    calc:s=>`${s.bookings} appointments a day × 5 days × 5 min each`},
+  {id:'phones', g:'front', short:'Calls & inbox', name:'Calls, voicemails & the patient inbox', desc:'Answer and route calls, return voicemails and keep the patient inbox clear.', rate:12, on:true,
+    fields:['phoneHrs'], hours:s=>s.phoneHrs*5,
+    calc:s=>`${s.phoneHrs} hrs a day × 5 workdays`},
+  {id:'saturday', g:'front', short:'Saturday coverage', name:'Saturday coverage', desc:'Front desk coverage on Saturdays (for example 8 AM to 12 PM).', rate:12, on:false,
+    fields:['satHrs'], hours:s=>s.satHrs,
+    calc:s=>`${s.satHrs} hrs every Saturday`},
+  // Billing, HR & scheduling
+  {id:'billing', g:'billing', short:'Billing', name:'Billing coordination', desc:'Prepare and submit claims, post payments and follow up on denials and unpaid balances.', rate:14, on:false,
+    fields:['claims'], hours:s=>s.claims*5/60,
+    calc:s=>`${s.claims} visits or claims a week × 5 min each`},
+  {id:'hr', g:'billing', short:'Payroll, HR & credentialing', name:'Payroll, HR & credentialing', desc:'Process timesheets and payroll, keep staff files current and track licenses and credentialing.', rate:13, on:false,
+    fields:['staffN'], hours:s=>s.staffN*20/60,
+    calc:s=>`${s.staffN} people on payroll × 20 min each a week`},
+  {id:'sched', g:'billing', short:'Schedule management', name:'Schedule management', desc:'Build provider and visit schedules, handle changes and follow up on missed visits.', rate:12, on:true,
+    fields:['clinicians'], hours:s=>s.clinicians*5*15/60 + s.clinicians*1.5*10/60,
+    calc:s=>`${s.clinicians} clinicians × 5 schedule changes × 15 min = ${f1(s.clinicians*5*15/60)} hrs, plus ${s.clinicians} × 1.5 missed visits × 10 min = ${f1(s.clinicians*1.5*10/60)} hrs`},
+  {id:'auths', g:'billing', short:'Authorizations', name:'Authorizations', desc:'Submit, track and follow up on authorizations and reauthorizations so visits get paid.', rate:14, on:true,
+    fields:['census'], payer:true, hours:s=>s.census*CFG.authsPerPatientMonth[s.payer]/WPM*40/60,
+    calc:s=>`${s.census} patients × ${CFG.authsPerPatientMonth[s.payer]} auths a month (${PAYER[s.payer]}) = ${f1(s.census*CFG.authsPerPatientMonth[s.payer])} a month ÷ 4.33 = ${f1(s.census*CFG.authsPerPatientMonth[s.payer]/WPM)} a week × 40 min each`},
+  // Clinical (RN)
+  {id:'orders', g:'clinical', rn:true, short:'Orders & results', name:'Orders and results routing', desc:'Send orders out, track them, and route incoming results to the right provider.', rate:15, on:false,
+    fields:['orders'], hours:s=>s.orders*6/60,
+    calc:s=>`${s.orders} orders and results a week × 6 min each`},
+  {id:'charts', g:'clinical', rn:true, short:'Chart reminders', name:'Chart-completion reminders', desc:'Track open charts and remind providers to finish and sign their notes.', rate:15, on:false,
+    fields:['clinicians'], hours:s=>s.clinicians*15/60,
+    calc:s=>`${s.clinicians} clinicians × 15 min of chart tracking each a week`},
+  {id:'dme', g:'clinical', rn:true, short:'DME orders', name:'Durable medical equipment (DME) orders', desc:'Prepare DME orders, collect documentation and follow up with suppliers.', rate:15, on:false,
+    fields:['dme'], hours:s=>s.dme*20/60,
+    calc:s=>`${s.dme} DME orders a week × 20 min each`},
+  {id:'oasis', g:'clinical', rn:true, short:'OASIS QA', name:'OASIS & clinical QA', desc:'Review OASIS assessments and visit notes for accuracy before submission (home health).', rate:17, on:false,
+    fields:['census','referrals'], hours:s=>(s.census*7/60 + s.referrals*2/WPM)*45/60,
+    calc:s=>`${f1(s.census*7/60)} recertifications (${s.census} patients × 7 ÷ 60 days) + ${f1(s.referrals*2/WPM)} start-of-care and discharge reviews a week × 45 min each`},
+  // Executive assistant
+  {id:'calendar', g:'exec', short:'Calendar & meetings', name:'Calendar and meeting requests', desc:'Manage calendars, book meetings and handle meeting requests for your doctors or leaders.', rate:12, on:false,
+    fields:['execs'], hours:s=>s.execs*3,
+    calc:s=>`${s.execs} people supported × 3 hrs each a week`},
+  {id:'bd', g:'exec', short:'Business development', name:'Business development follow-up', desc:'Follow up with referral sources, partners and leads so opportunities don’t go cold.', rate:12, on:false,
+    fields:['bdHrs'], hours:s=>s.bdHrs,
+    calc:s=>`${s.bdHrs} hrs a week`},
+  {id:'comms', g:'exec', short:'Internal comms', name:'Internal communications', desc:'Send staff updates, take meeting notes and keep everyone informed.', rate:12, on:false,
+    fields:['commsHrs'], hours:s=>s.commsHrs*5,
+    calc:s=>`${s.commsHrs} hrs a day × 5 workdays`},
+];
+/* ================================================================================ */
+
+const state = {payer:'mix', on:{}, tab:0};
+Object.keys(FIELDS).forEach(k=>state[k]=FIELDS[k].val);
+TASKS.forEach(t=>state.on[t.id]=t.on);
+
+const $ = s => document.querySelector(s);
+const money = n => '$' + Math.round(n).toLocaleString('en-US');
+const PROD = CFG.paidHours*CFG.targetBusy;
+const fte = h => h/PROD;
+const vaShort = h => { const v = fte(h); return v < 0.05 ? '<0.1 VA' : `${v.toFixed(1)} VA`; };
+const staff = h => h<=0 ? 0 : Math.max(CFG.step, Math.ceil(fte(h)/CFG.step - 1e-9)*CFG.step);
+const vaWord = v => v===1 ? '1 VA' : `${v} VAs`;
+
+/* build tabs + panels */
+$('#tablist').innerHTML = GROUPS.map((g,i)=>`<button type="button" role="tab" class="tab" id="tab-${g.id}" aria-controls="panel-${g.id}" aria-selected="${i===0}" tabindex="${i===0?0:-1}" data-i="${i}"><span class="dot" aria-hidden="true"></span>${g.name}</button>`).join('');
+$('#panels').innerHTML = GROUPS.map((g,i)=>`
+  <div class="panel" role="tabpanel" id="panel-${g.id}" aria-labelledby="tab-${g.id}" ${i===0?'':'hidden'}>
+    <div class="ptitle"><h3 style="font-size:19px">${g.name}</h3><p>${g.desc} Switch on the tasks you need.</p></div>
+    ${TASKS.filter(t=>t.g===g.id).map(t=>`
+      <div class="tblock" data-block="${t.id}">
+        <div class="thead">
+          <div><h4>${t.name}</h4><p>${t.desc}</p></div>
+          <button type="button" class="switch" role="switch" data-task="${t.id}" aria-checked="${t.on}" aria-label="Include ${t.name}"><span class="knob" aria-hidden="true"></span><span class="lbl">${t.on?'Yes':'No'}</span></button>
+        </div>
+        <div class="tbody" data-body="${t.id}" ${t.on?'':'hidden'}>
+          ${t.fields.map(f=>`<div class="q">
+            <div class="q-row"><label for="${f}-${t.id}">${FIELDS[f].label}</label><output data-out="${f}">${state[f]}</output></div>
+            <input id="${f}-${t.id}" data-field="${f}" type="range" min="${FIELDS[f].min}" max="${FIELDS[f].max}" step="${FIELDS[f].step}" value="${state[f]}">
+          </div>`).join('')}
+          ${t.payer?`<div class="q"><div class="qlabel" id="payer-l">Who pays for most of your visits?</div>
+            <div class="seg" role="group" aria-labelledby="payer-l">
+              <button type="button" class="pick" data-payer="medicare">Mostly Medicare<small>Fewer authorizations</small></button>
+              <button type="button" class="pick" data-payer="mix">A mix<small>Medicare + insurance</small></button>
+              <button type="button" class="pick" data-payer="managed">Mostly insurance / Medicaid<small>Lots of authorizations</small></button>
+            </div></div>`:''}
+          <div class="mini" data-mini="${t.id}"></div>
+          <div class="calc" data-calc="${t.id}"></div>
+        </div>
+      </div>`).join('')}
+    <div class="group-sub" data-gsub="${g.id}"></div>
+    <div class="nav">
+      <button type="button" class="navbtn" data-go="${i-1}" ${i===0?'disabled':''}>← ${i>0?GROUPS[i-1].name:''}</button>
+      <button type="button" class="navbtn primary" data-go="${i+1}" ${i===GROUPS.length-1?'disabled':''}>Next: ${i<GROUPS.length-1?GROUPS[i+1].name:''} →</button>
+    </div>
+  </div>`).join('');
+
+function selectTab(i, focus){
+  state.tab = i;
+  GROUPS.forEach((g,j)=>{
+    const tab = document.getElementById('tab-'+g.id);
+    tab.setAttribute('aria-selected', j===i); tab.tabIndex = j===i?0:-1;
+    document.getElementById('panel-'+g.id).hidden = j!==i;
+  });
+  if (focus) document.getElementById('tab-'+GROUPS[i].id).focus();
+  render();
+}
+
+function render(){
+  const s = state;
+  const rows = TASKS.map(t=>({...t, h:t.hours(s), on:s.on[t.id]}));
+  const picked = rows.filter(t=>t.on);
+  const admin = picked.filter(t=>!t.rn), rn = picked.filter(t=>t.rn);
+  const hA = admin.reduce((a,t)=>a+t.h,0), hR = rn.reduce((a,t)=>a+t.h,0);
+  const vA = staff(hA), vR = staff(hR), totV = vA+vR, totH = hA+hR;
+  const rateA = hA ? admin.reduce((a,t)=>a+t.h*t.rate,0)/hA : 0;
+  const rateR = hR ? rn.reduce((a,t)=>a+t.h*t.rate,0)/hR : 0;
+  const weekly = vA*CFG.paidHours*rateA + vR*CFG.paidHours*rateR;
+  const weeklyIntro = vA*CFG.paidHours*INTRO.admin + vR*CFG.paidHours*INTRO.rn;
+
+  // grand total
+  $('#gNum').textContent = totV ? vaWord(totV) : 'Switch on a task';
+  $('#gMonthly').textContent = totV ? money(weekly*WPM) : '—';
+  $('#gHours').textContent = totV ? Math.round(totH)+' hrs/wk' : '—';
+
+  // role strip: each role with its switched-on tasks and VA per task
+  $('#strip').innerHTML = GROUPS.map((g,i)=>{
+    const on = rows.filter(t=>t.g===g.id && t.on);
+    const gh = on.reduce((a,t)=>a+t.h,0);
+    return `<button type="button" class="sum ${on.length?'':'off'} ${i===s.tab?'current':''}" data-jump="${i}">
+      <span class="t">${g.name}</span>
+      <span class="v">${on.length ? vaShort(gh) : 'Not needed'}</span>
+      ${on.length ? `<span class="lines">${on.map(t=>`<span>${t.short}<em>${vaShort(t.h).replace(' VA','')}</em></span>`).join('')}</span>` : `<span class="h">Tap to choose tasks</span>`}
+    </button>`;
+  }).join('');
+
+  // tabs, blocks, mini results, calcs
+  GROUPS.forEach(g=>{
+    const on = rows.filter(t=>t.g===g.id && t.on);
+    const gh = on.reduce((a,t)=>a+t.h,0);
+    document.getElementById('tab-'+g.id).classList.toggle('on', on.length>0);
+    document.querySelector(`[data-gsub="${g.id}"]`).innerHTML = on.length
+      ? `<span>${g.name} total: ${on.length} task${on.length>1?'s':''}, ${f1(gh)} hrs/week</span><b>${vaShort(gh)}</b>`
+      : `<span class="hint">No ${g.name.toLowerCase()} tasks switched on.</span>`;
+  });
+  rows.forEach(t=>{
+    const sw = document.querySelector(`.switch[data-task="${t.id}"]`);
+    sw.setAttribute('aria-checked', t.on); sw.querySelector('.lbl').textContent = t.on?'Yes':'No';
+    document.querySelector(`[data-block="${t.id}"]`).classList.toggle('on', t.on);
+    document.querySelector(`[data-body="${t.id}"]`).hidden = !t.on;
+    document.querySelector(`[data-mini="${t.id}"]`).innerHTML = `<span>About <b>${f1(t.h)} hrs</b> a week</span><b>${vaShort(t.h)}</b>`;
+    document.querySelector(`[data-calc="${t.id}"]`).innerHTML =
+      `<div class="ck">How we calculated this</div><p>${t.calc(s)} = <strong>${f1(t.h)} hrs/week</strong></p><p>${f1(t.h)} hrs ÷ ${PROD} productive hrs per VA = <strong>${vaShort(t.h)}</strong></p>`;
+  });
+  document.querySelectorAll('[data-out]').forEach(o=>o.textContent = s[o.dataset.out]);
+  document.querySelectorAll('[data-field]').forEach(inp=>{ if (Number(inp.value)!==s[inp.dataset.field]) inp.value = s[inp.dataset.field]; });
+  document.querySelectorAll('[data-payer]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.payer===s.payer));
+
+  // overall steps
+  const steps = [];
+  if (!picked.length){
+    steps.push('Switch on at least one task to see the calculation.');
+  } else {
+    steps.push(`Add up the tasks you switched on: ${picked.map(t=>`${t.short} ${f1(t.h)}`).join(' + ')} = <strong>${f1(totH)} hrs of work a week</strong>.`);
+    steps.push(`One VA works ${CFG.paidHours} paid hours a week and is planned at ${Math.round(CFG.targetBusy*100)}% busy = <strong>${PROD} productive hours</strong>. The rest covers breaks, training, meetings and busy days.`);
+    if (hA) steps.push(`Non-clinical tasks: ${f1(hA)} hrs ÷ ${PROD} = ${fte(hA).toFixed(2)}, rounded up to the next half VA = <strong>${vaWord(vA)}</strong>.`);
+    if (hR) steps.push(`Clinical (RN) tasks: ${f1(hR)} hrs ÷ ${PROD} = ${fte(hR).toFixed(2)}, rounded up to the next half VA = <strong>${vR===1?'1 RN VA':vR+' RN VAs'}</strong>. These are counted separately because they need a licensed nurse.`);
+    steps.push(`How busy your team will be: ${f1(totH)} hrs ÷ (${totV} × ${CFG.paidHours} paid hrs) = <strong>${Math.round(totH/(totV*CFG.paidHours)*100)}%</strong>.`);
+    const pp = [];
+    if (vA) pp.push(`${vA} non-clinical VA × ${CFG.paidHours} hrs × $${rateA.toFixed(2)}/hr (average of the task rates)`);
+    if (vR) pp.push(`${vR} RN VA × ${CFG.paidHours} hrs × $${rateR.toFixed(2)}/hr`);
+    steps.push(`Weekly cost: ${pp.join(' + ')} = <strong>${money(weekly)}/week</strong>.`);
+    steps.push(`Monthly cost: ${money(weekly)} × 52 weeks ÷ 12 months = <strong>${money(weekly*WPM)}/month</strong>.`);
+  }
+  $('#howTotal').innerHTML = steps.map(x=>`<li>${x}</li>`).join('');
+  $('#howNote').hidden = picked.length < 2;
+
+  // result card
+  if (!picked.length){
+    $('#hoursBack').textContent='—'; $('#monthly').textContent='—'; $('#weekly').textContent=''; $('#busy').innerHTML=''; $('#promo').hidden=true; return;
+  }
+  $('#hoursBack').textContent = Math.round(totH)+' hrs';
+  $('#monthly').textContent = money(weekly*WPM);
+  $('#weekly').textContent = money(weekly)+' per week';
+  const busy = totH/(totV*CFG.paidHours);
+  $('#busy').innerHTML = `<span class="pill">${Math.round(busy*100)}% busy</span><span>${busy>=0.7?'Fully used, with room for busy days.':'Extra room to take on more tasks as you grow.'}</span>`;
+  $('#promo').hidden=false;
+  $('#promo').innerHTML = `<strong>Intro rate:</strong> ${money(weeklyIntro*WPM)}/month if you start before ${CFG.introUntil}.`;
+}
+
+/* events */
+$('#tablist').addEventListener('click', e=>{ const b=e.target.closest('.tab'); if (b) selectTab(Number(b.dataset.i)); });
+$('#tablist').addEventListener('keydown', e=>{
+  const n=GROUPS.length; let i=state.tab;
+  if (e.key==='ArrowRight') i=(i+1)%n; else if (e.key==='ArrowLeft') i=(i-1+n)%n; else if (e.key==='Home') i=0; else if (e.key==='End') i=n-1; else return;
+  e.preventDefault(); selectTab(i,true);
+});
+$('#strip').addEventListener('click', e=>{
+  const b=e.target.closest('[data-jump]'); if (!b) return;
+  selectTab(Number(b.dataset.jump));
+  document.getElementById('tasksH').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth', block:'start'});
+});
+$('#panels').addEventListener('input', e=>{ const f=e.target.dataset.field; if (f){ state[f]=Number(e.target.value); render(); } });
+$('#panels').addEventListener('click', e=>{
+  const sw=e.target.closest('.switch'); if (sw){ state.on[sw.dataset.task]=!state.on[sw.dataset.task]; render(); return; }
+  const p=e.target.closest('[data-payer]'); if (p){ state.payer=p.dataset.payer; render(); return; }
+  const g=e.target.closest('[data-go]'); if (g && !g.disabled){ selectTab(Number(g.dataset.go)); }
+});
+render();
+</script>
+</body>
+</html>
